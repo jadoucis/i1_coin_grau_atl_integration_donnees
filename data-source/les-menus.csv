@@ -1,0 +1,3 @@
+﻿id_menu,nom,seuil_glucides,seuil_lipides,seuil_proteines,seuil_calories
+1,FODMAP,5,10,15,2000
+2,Méditerranéen,20,30,20,2500
