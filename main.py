@@ -1,6 +1,6 @@
 import pymysql
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, split, first
+from pyspark.sql.functions import col, split, first, rand
 from sqlalchemy import create_engine
 
 utilisateur_id = 1
@@ -85,17 +85,40 @@ joined_df = selected_columns_valid_products_result.join(
 aliment_utilisateur_1 = joined_df.filter(joined_df["id_utilisateur"] == utilisateur_id)
 
 # Sélection de la colonne des catégories et suppression des doublons
-result = aliment_utilisateur_1.dropDuplicates(["categories"])
-result.show(100)
+#result = aliment_utilisateur_1.dropDuplicates(["categories"])
 
-# Convertir en DataFrame Pandas
-df_pandas = result.toPandas()
+jours_semaine = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
 
-# Créer la connexion
-engine = create_engine('mysql+pymysql://root:@localhost/tp-integration')
+def choisir_aleatoire(df):
+    return df.orderBy(rand()).first()
 
-# Écrire le DataFrame Pandas dans MySQL
-df_pandas.to_sql(name='menu', con=engine, if_exists='replace', index=False)
+# Création du DataFrame final pour le menu de la semaine
+menu_semaine = []
+
+for jour in jours_semaine:
+
+    # Sélection aléatoire d'une boisson, d'un produit laitier et d'un plat préparé pour chaque jour
+    boisson_jour = choisir_aleatoire(aliment_utilisateur_1.select("product_name").filter("categories LIKE '%Boissons%'"))
+    produit_laitier_jour = choisir_aleatoire(aliment_utilisateur_1.select("product_name").filter("categories LIKE '%Produits laitiers%'"))
+    plat_prepa_jour = choisir_aleatoire(aliment_utilisateur_1.select("product_name").filter("categories LIKE '%Plats préparés%'"))
+
+    menu_semaine.append((jour, boisson_jour["product_name"], produit_laitier_jour["product_name"], plat_prepa_jour["product_name"]))
+
+# Création du DataFrame Spark pour le menu de la semaine
+df_menu_semaine = spark.createDataFrame(menu_semaine, ["Jour", "Boisson", "Produit_laitier", "Plat_prepa"])
+
+# Affichage du menu de la semaine
+df_menu_semaine.show()
+
+
+# # Convertir en DataFrame Pandas
+# df_pandas = result.toPandas()
+#
+# # Créer la connexion
+# engine = create_engine('mysql+pymysql://root:@localhost/tp-integration')
+#
+# # Écrire le DataFrame Pandas dans MySQL
+# df_pandas.to_sql(name='menu', con=engine, if_exists='replace', index=False)
 
 # Arrêter la session Spark
 spark.stop()
