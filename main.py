@@ -3,6 +3,8 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, split, first
 from sqlalchemy import create_engine
 
+utilisateur_id = 1
+
 # Initialisation de la session Spark
 spark = SparkSession.builder \
     .appName("MenuGeneration") \
@@ -19,7 +21,10 @@ df_menus = spark.read.csv(menus_path, header=True, inferSchema=True)
 # Chargement des données des utilisateurs depuis un fichier CSV
 users_path = "C:/Users/cguil/Documents/I1/Intégration des données/data source/les-utilisateurs.csv"
 df_users = spark.read.csv(users_path, header=True, inferSchema=True)
-#
+
+# Filtrer le DataFrame pour récupérer les informations sur l'utilisateur 1
+region_utilisateur_1 = df_users.filter(df_users["id_utilisateur"] == utilisateur_id).select("region").collect()[0][0]
+
 # Filtrage des produits valides
 df_valid_products = df_openfoodfacts.filter(
     col("product_name").isNotNull() &
@@ -29,7 +34,8 @@ df_valid_products = df_openfoodfacts.filter(
     col("carbohydrates_100g").isNotNull() &
     col("proteins_100g").isNotNull() &
     col("categories").isNotNull() &
-    col("cities_tags").isNotNull()
+    col("cities_tags").isNotNull() &
+    col("cities_tags").contains(region_utilisateur_1)
 )
 
 # Filtrage des menus valides
@@ -51,47 +57,46 @@ df_valid_users = df_users.filter(
     col("sexe").isNotNull() &
     col("poids").isNotNull()
 )
-# création d'une nouvelle colonne "categorie_label" qui récupère uniquement l'élément interessant
-df_result = df_valid_products.withColumn("categorie_label", split(df_valid_products["categories"], ",").getItem(0))
 
-#Sélection des colonne visible dans le dataFrame
-selected_columns_df = df_result.select("product_name", "countries_en", "energy_100g","fat_100g","carbohydrates_100g","proteins_100g","categorie_label").limit(10)
-#selected_columns_df.limit(100).show(truncate=False)
+#récuperation de seulement le label
+df_valid_products_result = df_valid_products.withColumn("categories", split(df_valid_products["categories"], ",")[0])
 
-# connection = pymysql.connect(
-#     host='localhost',
-#     user='root',
-#     password='',
-#     database='tp-integration',
-#     charset='utf8mb4',
-#     cursorclass=pymysql.cursors.DictCursor
-# )
+#recupération des colonnes intéressantes
+selected_columns_valid_products_result = df_valid_products_result.select("product_name", "cities_tags", "energy_100g","fat_100g","carbohydrates_100g","proteins_100g","categories")
 
-# Convertir le DataFrame Spark en DataFrame Pandas
-df_pandas = selected_columns_df.toPandas()
 
-# Créer le moteur SQLAlchemy avec le pilote MySQL de PyMySQL
+# Jointure entre les DataFrames des utilisateurs et des menus sur la colonne "id_menu"
+df_user_menu = df_users.join(df_menus, df_users["id_menu"] == df_menus["id_menu"], "inner")
+
+# Sélection de certaines colonnes après la jointure
+user_menu_join = df_user_menu.select(df_users["id_utilisateur"], df_menus["nom_menu"], df_menus["seuil_glucides"], df_menus["seuil_lipides"], df_menus["seuil_proteines"], df_menus["seuil_calories"])
+
+#jointure des 3 sources
+joined_df = selected_columns_valid_products_result.join(
+    user_menu_join,
+    (selected_columns_valid_products_result["proteins_100g"] < user_menu_join["seuil_proteines"]) &
+    (selected_columns_valid_products_result["carbohydrates_100g"] < user_menu_join["seuil_glucides"]) &
+    (selected_columns_valid_products_result["fat_100g"] < user_menu_join["seuil_lipides"]) &
+    (selected_columns_valid_products_result["energy_100g"] < user_menu_join["seuil_calories"]),
+    "inner"
+)
+
+#filtre pour récupérer uniquement l'utilisateur demande
+aliment_utilisateur_1 = joined_df.filter(joined_df["id_utilisateur"] == utilisateur_id)
+
+# Sélection de la colonne des catégories et suppression des doublons
+result = aliment_utilisateur_1.dropDuplicates(["categories"])
+result.show(100)
+
+# Convertir en DataFrame Pandas
+df_pandas = result.toPandas()
+
+# Créer la connexion
 engine = create_engine('mysql+pymysql://root:@localhost/tp-integration')
 
-
-# Étape 3 : Écrire le DataFrame Pandas dans MySQL
+# Écrire le DataFrame Pandas dans MySQL
 df_pandas.to_sql(name='menu', con=engine, if_exists='replace', index=False)
 
-#
-
-
-
-
-
-
-# df_result["categorie_label"].limit(100).show(truncate=False)
-
-
-#df_valid_products.limit(100).show(truncate=False)
-#
-# df_valid_users.limit(100).show(truncate=False)
-#
-# df_valid_menus.limit(100).show(truncate=False)
 # Arrêter la session Spark
 spark.stop()
 
