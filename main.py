@@ -3,6 +3,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, split, first, rand
 from sqlalchemy import create_engine
 
+#id de l'utilisateur à renseigner
 utilisateur_id = 1
 
 # Initialisation de la session Spark
