@@ -1,3 +1,4 @@
-﻿id_menu,nom,seuil_glucides,seuil_lipides,seuil_proteines,seuil_calories
-1,FODMAP,5,10,15,2000
-2,Méditerranéen,20,30,20,2500
+﻿id_menu,nom_menu,seuil_glucides,seuil_lipides,seuil_proteines,seuil_calories
+1,Perte de poids,50,13,15,200
+2,Prise de poids,70,26,30,400
+3,Bio,70,26,30,400
